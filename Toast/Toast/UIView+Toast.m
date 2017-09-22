@@ -145,6 +145,44 @@ static const NSString * CSToastQueueKey             = @"CSToastQueueKey";
     
     [self addSubview:toast];
     
+    NSDictionary *views = NSDictionaryOfVariableBindings(toast);
+    
+    toast.translatesAutoresizingMaskIntoConstraints = NO;
+    
+    [self addConstraint:[NSLayoutConstraint constraintWithItem:toast
+                                                     attribute:NSLayoutAttributeCenterX
+                                                     relatedBy:NSLayoutRelationEqual
+                                                        toItem:self
+                                                     attribute:NSLayoutAttributeCenterX
+                                                    multiplier:1.f
+                                                      constant:0.f]];
+    
+    if(position == CSToastPositionTop) {
+        [self addConstraint:[NSLayoutConstraint constraintWithItem:toast
+                                                         attribute:NSLayoutAttributeTop
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self
+                                                         attribute:NSLayoutAttributeTop
+                                                        multiplier:1.f
+                                                          constant:0.f]];
+    } else if(position == CSToastPositionCenter) {
+        [self addConstraint:[NSLayoutConstraint constraintWithItem:toast
+                                                         attribute:NSLayoutAttributeCenterY
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self
+                                                         attribute:NSLayoutAttributeCenterY
+                                                        multiplier:1.f
+                                                          constant:0.f]];
+    } else {
+        [self addConstraint:[NSLayoutConstraint constraintWithItem:toast
+                                                         attribute:NSLayoutAttributeBottom
+                                                         relatedBy:NSLayoutRelationEqual
+                                                            toItem:self
+                                                         attribute:NSLayoutAttributeBottom
+                                                        multiplier:1.f
+                                                          constant:0.f]];
+    }
+    
     [UIView animateWithDuration:[[CSToastManager sharedStyle] fadeDuration]
                           delay:0.0
                         options:(UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionAllowUserInteraction)
@@ -195,6 +233,153 @@ static const NSString * CSToastQueueKey             = @"CSToastQueueKey";
 #pragma mark - View Construction
 
 - (UIView *)toastViewForMessage:(NSString *)message title:(NSString *)title image:(UIImage *)image style:(CSToastStyle *)style {
+    return [self autoLayoutToastViewForMessage:message title:title image:image style:style];
+}
+
+- (UIView *)autoLayoutToastViewForMessage:(NSString *)message title:(NSString *)title image:(UIImage *)image style:(CSToastStyle *)style {
+    // sanity
+    if(message == nil && title == nil && image == nil) return nil;
+    
+    // default to the shared style
+    if (style == nil) {
+        style = [CSToastManager sharedStyle];
+    }
+    
+    // dynamically build a toast view with any combination of message, title, & image
+    UILabel *messageLabel = nil;
+    UILabel *titleLabel = nil;
+    UIImageView *imageView = nil;
+    
+    UIView *toastView = [[UIView alloc] init];
+    
+    toastView.layer.cornerRadius = style.cornerRadius;
+    
+    if (style.displayShadow) {
+        toastView.layer.shadowColor = style.shadowColor.CGColor;
+        toastView.layer.shadowOpacity = style.shadowOpacity;
+        toastView.layer.shadowRadius = style.shadowRadius;
+        toastView.layer.shadowOffset = style.shadowOffset;
+    }
+    
+    toastView.backgroundColor = style.backgroundColor;
+    
+    if(image != nil) {
+        imageView = [[UIImageView alloc] initWithImage:image];
+        imageView.contentMode = UIViewContentModeScaleAspectFit;
+        imageView.frame = CGRectMake(style.horizontalPadding, style.verticalPadding, style.imageSize.width, style.imageSize.height);
+    }
+    
+    CGRect imageRect = CGRectZero;
+    
+    if(imageView != nil) {
+        imageRect.origin.x = style.horizontalPadding;
+        imageRect.origin.y = style.verticalPadding;
+        imageRect.size.width = imageView.bounds.size.width;
+        imageRect.size.height = imageView.bounds.size.height;
+    }
+    
+    if (title != nil) {
+        titleLabel = [[UILabel alloc] init];
+        titleLabel.numberOfLines = style.titleNumberOfLines;
+        titleLabel.font = style.titleFont;
+        titleLabel.textAlignment = style.titleAlignment;
+        titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        titleLabel.textColor = style.titleColor;
+        titleLabel.backgroundColor = [UIColor clearColor];
+        titleLabel.alpha = 1.0;
+        titleLabel.text = title;
+    }
+    
+    if (message != nil) {
+        messageLabel = [[UILabel alloc] init];
+        messageLabel.numberOfLines = style.messageNumberOfLines;
+        messageLabel.font = style.messageFont;
+        messageLabel.textAlignment = style.messageAlignment;
+        messageLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+        messageLabel.textColor = style.messageColor;
+        messageLabel.backgroundColor = [UIColor clearColor];
+        messageLabel.alpha = 1.0;
+        messageLabel.text = message;
+    }
+    
+    toastView.translatesAutoresizingMaskIntoConstraints = NO;
+    
+    NSDictionary *metrics = @{@"hp": [NSNumber numberWithFloat:style.horizontalPadding],
+                              @"vp": [NSNumber numberWithFloat:style.verticalPadding]};
+    
+    NSMutableDictionary *views = [[NSMutableDictionary alloc] initWithCapacity:4];
+    
+    if(imageView) {
+        [toastView addSubview:imageView];
+        
+        views[@"imageView"] = imageView;
+        
+        imageView.translatesAutoresizingMaskIntoConstraints = NO;
+    }
+    
+    if(titleLabel) {
+        [toastView addSubview:titleLabel];
+        
+        views[@"titleLabel"] = titleLabel;
+        
+        titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        
+        [toastView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-hp-[titleLabel]-hp-|"
+                                                                          options:0
+                                                                          metrics:metrics
+                                                                            views:views]];
+    }
+    
+    if(messageLabel) {
+        [toastView addSubview:messageLabel];
+        
+        views[@"messageLabel"] = messageLabel;
+        
+        messageLabel.translatesAutoresizingMaskIntoConstraints = NO;
+        
+        [toastView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|-hp-[messageLabel]-hp-|"
+                                                                          options:0
+                                                                          metrics:metrics
+                                                                            views:views]];
+    }
+    
+    if(imageView && titleLabel && messageLabel) {
+        [toastView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-vp-[titleLabel]-vp-[messageLabel]-vp-|"
+                                                                          options:0
+                                                                          metrics:metrics
+                                                                            views:views]];
+    } else if(titleLabel && messageLabel) {
+        [toastView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-vp-[titleLabel]-vp-[messageLabel]-vp-|"
+                                                                          options:0
+                                                                          metrics:metrics
+                                                                            views:views]];
+    } else if(messageLabel) {
+        [toastView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-vp-[messageLabel]-vp-|"
+                                                                          options:0
+                                                                          metrics:metrics
+                                                                            views:views]];
+    }
+    
+    UIView *wrapperView = [[UIView alloc] init];
+    wrapperView.translatesAutoresizingMaskIntoConstraints = NO;
+    wrapperView.backgroundColor = [UIColor clearColor];
+    
+    [wrapperView addSubview:toastView];
+    
+    [wrapperView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"H:|[toastView]|"
+                                                                        options:0
+                                                                        metrics:0
+                                                                          views:@{ @"toastView" : toastView }]];
+    
+    [wrapperView addConstraints:[NSLayoutConstraint constraintsWithVisualFormat:@"V:|-vp-[toastView]-vp-|"
+                                                                        options:0
+                                                                        metrics:metrics
+                                                                          views:@{ @"toastView" : toastView }]];
+    
+    return wrapperView;
+}
+
+- (UIView *)manualToastViewForMessage:(NSString *)message title:(NSString *)title image:(UIImage *)image style:(CSToastStyle *)style {
     // sanity
     if(message == nil && title == nil && image == nil) return nil;
     
